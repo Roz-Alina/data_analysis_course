@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 import pickle
 import os
+from sklearn.ensemble import RandomForestRegressor
 
-os.chdir('hw_9')
 model_path = 'model.pkl'
 city_list_path = 'city_list.txt'
 encoder_path = 'encoder.pkl'
+scaler_path = 'scaler.pkl'
 
 if not os.path.exists(model_path):
     df = pd.read_csv('realty_data.csv')
@@ -31,18 +31,26 @@ if not os.path.exists(model_path):
 
     X_train = df_new.drop(columns='price')
     y_train = df_new['price']
+    scaler = StandardScaler()
+    X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
 
-    lr = LinearRegression()
-    lr.fit(X_train, y_train)
+    with open(scaler_path, 'wb') as f:
+        pickle.dump(scaler, f)
+
+    model = RandomForestRegressor(n_estimators=100, random_state=2026)
+    model.fit(X_train_scaled, y_train)
 
     with open(model_path, 'wb') as file:
-        pickle.dump(lr, file)
+        pickle.dump(model, file)
 
 with open(model_path, 'rb') as file:
     model = pickle.load(file)
 
 with open(encoder_path, 'rb') as f:
     encoder = pickle.load(f)
+
+with open(scaler_path, 'rb') as f:
+    scaler = pickle.load(f)
 
 with open(city_list_path, "r") as f:
     city_list = [line.strip() for line in f]
@@ -59,6 +67,7 @@ input_df = pd.DataFrame([{'rooms' : rooms, 'floor': floor}])
 encoded_input_city = encoder.transform([[city]])
 encoded_input_city_df = pd.DataFrame(encoded_input_city, columns=encoder.get_feature_names_out())
 input_df = pd.concat([input_df, encoded_input_city_df], axis=1)
-predicted_price = round(model.predict(input_df)[0])
+input_df_scaled = pd.DataFrame(scaler.transform(input_df), columns=input_df.columns)
+predicted_price = round(model.predict(input_df_scaled)[0])
 if submitted:
     st.write(f'Стоимость квартиры: {predicted_price:,} рублей'.replace(',', ' '))
